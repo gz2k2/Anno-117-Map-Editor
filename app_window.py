@@ -29,9 +29,68 @@ import rda_handler
 from models import IslandElement, MapTemplate
 from canvas_view import MapCanvas
 import filedb_handler as _fdb
+import filedb_io as _fdb_io
+import terrain_builder as _terrain
 from xml_io import load_xml, save_xml
 from dialogs import IslandPropertiesDialog, NewMapDialog, AboutDialog
 import mod_exporter as _mod_exp
+
+
+# ─── Export progress window ─────────────────────────────────────────────────
+
+class _ExportProgressWindow(tk.Toplevel):
+    """
+    Modal, indeterminate progress window shown while a mod export runs on a
+    worker thread.  Deliberately has no cancel button: the export writes into a
+    temp folder and interrupting FileDBReader mid-run would leave it behind.
+
+    Only ever driven from the main thread - the worker posts updates through
+    root.after().
+    """
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Exporting Mod")
+        self.configure(bg=config.BG_SECTION)
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+        self.protocol("WM_DELETE_WINDOW", lambda: None)   # no closing mid-export
+
+        tk.Label(self, text="Building mod…", bg=config.BG_SECTION,
+                 fg=config.FG_GOLD, font=config.FONT_HEADER).pack(
+                     anchor="w", padx=18, pady=(16, 2))
+
+        self._msg = tk.StringVar(value="Starting…")
+        tk.Label(self, textvariable=self._msg, bg=config.BG_SECTION,
+                 fg=config.FG_DIM, font=config.FONT_SMALL,
+                 anchor="w", width=46).pack(anchor="w", padx=18)
+
+        self._bar = ttk.Progressbar(self, mode="indeterminate", length=320)
+        self._bar.pack(padx=18, pady=(10, 6))
+        self._bar.start(12)
+
+        tk.Label(self, text="Terrain is generated once per map size and reused "
+                            "for all three difficulties.",
+                 bg=config.BG_SECTION, fg=config.FG_DIM,
+                 font=config.FONT_XSMALL, wraplength=320,
+                 justify="left").pack(anchor="w", padx=18, pady=(0, 14))
+
+        self.update_idletasks()
+        px = parent.winfo_rootx() + (parent.winfo_width() - self.winfo_reqwidth()) // 2
+        py = parent.winfo_rooty() + (parent.winfo_height() - self.winfo_reqheight()) // 2
+        self.geometry(f"+{max(0, px)}+{max(0, py)}")
+
+    def set_message(self, msg: str) -> None:
+        self._msg.set(msg)
+
+    def close(self) -> None:
+        try:
+            self._bar.stop()
+        except tk.TclError:
+            pass
+        self.grab_release()
+        self.destroy()
 
 
 # ─── Icon loader ────────────────────────────────────────────────────────────
@@ -947,7 +1006,7 @@ class MapEditorApp(tk.Frame):
         other_pa = dlg.result.get("companion_playable_area", (20, 20, 2020, 2020))
         other_tmpl = MapTemplate(
             region=other,
-            size=(2048, 2048),
+            size=other_size,
             playable_area=other_pa,
             initial_playable_area=other_pa,
             enlargement_offset=(0, 0),
@@ -1523,28 +1582,50 @@ class MapEditorApp(tk.Frame):
         slug, display_name, description, start_guid, zip_path, install_path, debug_xml, auto_derive = dlg._result
         personal_mode = getattr(dlg, "_personal_mode", False)
 
+        # Terrain generation makes an export take tens of seconds per map size,
+        # so it runs on a worker thread behind a progress window - doing it
+        # inline blocks the event loop and Windows paints the app as hung.
         self.set_status("Building mod zip…")
-        try:
-            _mod_exp.build_mod_zip(
-                templates=tmpls,
-                slug=slug,
-                display_name=display_name,
-                description=description,
-                start_guid=start_guid,
-                zip_path=zip_path,
-                app=self,
-                install_path=install_path,
-                debug_xml=debug_xml,
-                auto_derive=auto_derive,
-            )
-        except _fdb.FileDBError as exc:
-            messagebox.showerror("Export Failed", str(exc), parent=self.root)
-            self.set_status("Mod export failed.")
-            return
-        except Exception as exc:
-            messagebox.showerror("Export Failed",
-                                 f"An unexpected error occurred:\n{exc}",
-                                 parent=self.root)
+        prog = _ExportProgressWindow(self.root)
+        failure: list = []
+
+        def _post(msg: str) -> None:
+            self.root.after(0, prog.set_message, msg)
+
+        def _worker() -> None:
+            try:
+                _mod_exp.build_mod_zip(
+                    templates=tmpls,
+                    slug=slug,
+                    display_name=display_name,
+                    description=description,
+                    start_guid=start_guid,
+                    zip_path=zip_path,
+                    app=self,
+                    install_path=install_path,
+                    debug_xml=debug_xml,
+                    auto_derive=auto_derive,
+                    progress=_post,
+                )
+            except Exception as exc:
+                failure.append(exc)
+            finally:
+                self.root.after(0, prog.close)
+
+        threading.Thread(target=_worker, daemon=True).start()
+        self.root.wait_window(prog)
+
+        if failure:
+            exc = failure[0]
+            # These three carry messages meant for the user; anything else
+            # is a bug and gets the generic wording.
+            if isinstance(exc, (_fdb.FileDBError, _fdb_io.FileDBFormatError,
+                                _terrain.TerrainBuildError)):
+                messagebox.showerror("Export Failed", str(exc), parent=self.root)
+            else:
+                messagebox.showerror("Export Failed",
+                                     f"An unexpected error occurred:\n{exc}",
+                                     parent=self.root)
             self.set_status("Mod export failed.")
             return
 
