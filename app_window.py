@@ -1004,6 +1004,7 @@ class MapEditorApp(tk.Frame):
         # Also create a default blank template for the other region so both canvases are editable without needing to save/reload between tabs.
         other = "Albion" if region == "Latium" else "Latium"
         other_pa = dlg.result.get("companion_playable_area", (20, 20, 2020, 2020))
+        other_size = dlg.result.get("companion_size", (2048, 2048))
         other_tmpl = MapTemplate(
             region=other,
             size=other_size,
