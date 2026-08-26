@@ -32,7 +32,7 @@ import filedb_handler as _fdb
 import filedb_io as _fdb_io
 import terrain_builder as _terrain
 from xml_io import load_xml, save_xml
-from dialogs import IslandPropertiesDialog, NewMapDialog, AboutDialog
+from dialogs import IslandPropertiesDialog, NewMapDialog, AboutDialog, ResizeMapDialog
 import mod_exporter as _mod_exp
 
 
@@ -592,6 +592,8 @@ class MapEditorApp(tk.Frame):
         edit_menu.add_command(label="Deselect All",  command=self._deselect_all,   accelerator="Escape")
         edit_menu.add_command(label="Delete Selected", command=self._delete_selected)
         edit_menu.add_separator()
+        edit_menu.add_command(label="Resize Map…", command=self._resize_map)
+        edit_menu.add_separator()
         edit_menu.add_command(label="Set Game Path…",         command=self._browse_game_path)
         edit_menu.add_command(label="Set FileDBReader Path…", command=self._browse_fdb)
         edit_menu.add_command(label="Set RdaConsole Path…",   command=self._browse_rda)
@@ -800,6 +802,20 @@ class MapEditorApp(tk.Frame):
         tab = self._current_tab()
         if tab and tab.canvas_widget:
             tab.canvas_widget.deselect_all()
+
+    def _resize_map(self):
+        tab = self._current_tab()
+        canvas = tab.canvas_widget if tab else None
+        if canvas is None or canvas.template is None:
+            messagebox.showinfo("No Map", "Please open or create a map first.", parent=self.root)
+            return
+        current_size = max(canvas.template.size)
+        dlg = ResizeMapDialog(self.root, current_size=current_size, region=tab.region)
+        if dlg.result is None:
+            return
+        if canvas.resize_map(dlg.result):
+            self.mark_modified()
+            self.set_status(f"{tab.region} map resized to {dlg.result}×{dlg.result}.")
 
     def _browse_game_path(self):
         path = filedialog.askdirectory(title="Select Anno 117 Installation Folder", parent=self.root)

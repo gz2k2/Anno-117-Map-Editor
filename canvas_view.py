@@ -460,6 +460,32 @@ class MapCanvas(tk.Canvas):
             self.on_modify()
         self.redraw()
 
+    def resize_map(self, new_size: int) -> bool:
+        """Grow the template's total map size. Only enlarging is supported -
+        new_size must exceed the current size. New space is added on the
+        north/east edges (x2/y2) only; the Playable Area's existing border
+        widths - and therefore every island already placed - are left
+        untouched, so nothing needs to move or be revalidated.
+        """
+        if self.template is None:
+            return False
+        old_size = max(self.template.size)
+        if new_size <= old_size:
+            return False
+        delta = new_size - old_size
+        pa = self.template.playable_area
+        self.template.size = (new_size, new_size)
+        self.template.playable_area = (pa[0], pa[1], pa[2] + delta, pa[3] + delta)
+        self.template.modified = True
+        self._update_transform()
+        self._default_scale = self._scale
+        self._default_cx = self._cx
+        self._default_cy = self._cy
+        if self.on_modify:
+            self.on_modify()
+        self.redraw()
+        return True
+
     def get_selected(self) -> Optional[IslandElement]:
         if self.template is None or self.selected_eid is None:
             return None

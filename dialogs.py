@@ -983,6 +983,88 @@ class NewMapDialog(_BaseDialog):
         }
         self.destroy()
 
+# ─── Resize Map ─────────────────────────────────────────────────────────────
+
+class ResizeMapDialog(_BaseDialog):
+    """Grow the total map size of an already-created template.
+
+    Only enlarging is allowed - shrinking would risk pushing existing islands
+    outside the map/PA bounds. New space is always added on the north/east
+    edges (x2/y2); the existing Playable Area border widths (and therefore
+    every island already placed) are left completely untouched.
+    """
+
+    _SIZE_MAX  = NewMapDialog._SIZE_MAX
+    _SIZE_STEP = NewMapDialog._SIZE_STEP
+
+    def __init__(self, parent, current_size: int, region: str):
+        self._current_size = current_size
+        self._region = region
+        super().__init__(parent, "Resize Map", width=380, height=None)
+
+    def _build(self):
+        tk.Label(self, text=f"Resize {self._region} Map", bg=config.BG_SECTION, fg=config.FG_GOLD, font=config.FONT_HEADER).pack(anchor="w", padx=16, pady=(14, 4))
+        _sep(self).pack(fill="x", padx=10, pady=4)
+
+        body = tk.Frame(self, bg=config.BG_SECTION)
+        body.pack(fill="x", padx=16, pady=(4, 0))
+
+        tk.Label(body, text=f"Current size: {self._current_size} × {self._current_size} px", bg=config.BG_SECTION, fg=config.FG_DIM, font=config.FONT_SMALL).pack(anchor="w", pady=(0, 8))
+
+        row = tk.Frame(body, bg=config.BG_SECTION)
+        row.pack(fill="x")
+        tk.Label(row, text="New size", width=10, anchor="w", bg=config.BG_SECTION, fg=config.FG_DIM, font=config.FONT_SMALL).pack(side="left")
+
+        self._size_var = tk.IntVar(value=self._current_size)
+        entry_var = tk.StringVar(value=str(self._current_size))
+
+        sl = tk.Scale(row, variable=self._size_var, from_=self._current_size, to=self._SIZE_MAX,
+                       resolution=self._SIZE_STEP, orient=tk.HORIZONTAL, length=180, showvalue=False,
+                       bg=config.BG_SECTION, fg=config.FG_MAIN, troughcolor=config.BG_HOVER,
+                       activebackground=config.FG_GOLD, highlightthickness=0,
+                       command=lambda *_: entry_var.set(str(self._size_var.get())))
+        sl.pack(side="left")
+
+        def _entry_to_slider(*_):
+            try:
+                raw = int(entry_var.get())
+            except ValueError:
+                entry_var.set(str(self._size_var.get()))
+                return
+            # Snap to the same step the slider uses - a tk.Scale does not coerce
+            # a value written straight into its variable, so an unsnapped one
+            # would survive into the template and leave the .a7tinfo size off the
+            # .a7te chunk grid.
+            snapped = round(raw / self._SIZE_STEP) * self._SIZE_STEP
+            snapped = max(self._current_size, min(self._SIZE_MAX, snapped))
+            self._size_var.set(snapped)
+            entry_var.set(str(snapped))
+
+        ent = _entry(row, textvariable=entry_var, width=6)
+        ent.pack(side="left", padx=(4, 2))
+        ent.bind("<Return>",   _entry_to_slider)
+        ent.bind("<FocusOut>", _entry_to_slider)
+        tk.Label(row, text="px", bg=config.BG_SECTION, fg=config.FG_DIM, font=config.FONT_XSMALL).pack(side="left")
+
+        tk.Label(body, text="New space is added on the north/east edges.\nExisting islands and the Playable Area borders\naround them stay exactly where they are.",
+                 bg=config.BG_SECTION, fg=config.FG_DIM, font=config.FONT_XSMALL, justify="left").pack(anchor="w", pady=(10, 4))
+
+        _sep(self).pack(fill="x", padx=10, pady=8)
+        btn_f = tk.Frame(self, bg=config.BG_SECTION)
+        btn_f.pack(pady=(0, 12))
+        _btn(btn_f, "  Resize  ", self._confirm, fg=config.BG_MAIN, bg=config.FG_GOLD).pack(side="left", padx=8)
+        _btn(btn_f, "  Cancel  ", self.destroy).pack(side="left", padx=8)
+
+    def _confirm(self):
+        new_size = self._size_var.get()
+        if new_size <= self._current_size:
+            messagebox.showinfo("No Change", "New size must be larger than the current size.", parent=self)
+            return
+        if not _confirm_oversized_map(self, new_size):
+            return
+        self.result = new_size
+        self.destroy()
+
 # ─── Fixed Island Picker ────────────────────────────────────────────────────────────
 
 class FixedIslandPickerDialog(_BaseDialog):
