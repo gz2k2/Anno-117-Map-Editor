@@ -325,6 +325,28 @@ class RegionTab(tk.Frame):
         chk.pack(anchor="w", padx=12)
         _bind_hover(chk, config.BG_SECTION, config.BG_HOVER)
 
+        self._ignore_collisions_var = tk.BooleanVar(value=False)
+        coll_chk = tk.Checkbutton(side, text="Ignore collisions", variable=self._ignore_collisions_var, command=self._on_ignore_collisions_toggle, bg=config.BG_SECTION, fg=config.FG_MAIN, selectcolor=config.BG_HOVER, activebackground=config.BG_HOVER, activeforeground=config.FG_GOLD, font=config.FONT_SMALL, cursor="hand2")
+        coll_chk.pack(anchor="w", padx=12)
+        _bind_hover(coll_chk, config.BG_SECTION, config.BG_HOVER)
+
+        self._lock_formation_var = tk.BooleanVar(value=False)
+        lock_chk = tk.Checkbutton(side, text="Lock formation at edges", variable=self._lock_formation_var, command=self._on_lock_formation_toggle, bg=config.BG_SECTION, fg=config.FG_MAIN, selectcolor=config.BG_HOVER, activebackground=config.BG_HOVER, activeforeground=config.FG_GOLD, font=config.FONT_SMALL, cursor="hand2")
+        lock_chk.pack(anchor="w", padx=12)
+        _bind_hover(lock_chk, config.BG_SECTION, config.BG_HOVER)
+
+        # Mirror mode: newly placed islands get copies rotated about the map
+        # centre, so a multiplayer map stays fair without placing each corner
+        # by hand. 2 = opposite corner, 4 = all four.
+        tk.Label(side, text="Mirror", bg=config.BG_SECTION, fg=config.FG_DIM, font=config.FONT_XSMALL).pack(anchor="w", padx=12, pady=(6, 0))
+        self._symmetry_var = tk.IntVar(value=0)
+        sym_row = tk.Frame(side, bg=config.BG_SECTION)
+        sym_row.pack(anchor="w", padx=12)
+        for label, value in (("off", 0), ("2×", 2), ("4×", 4)):
+            rb = tk.Radiobutton(sym_row, text=label, variable=self._symmetry_var, value=value, command=self._on_symmetry_change, bg=config.BG_SECTION, fg=config.FG_MAIN, selectcolor=config.BG_HOVER, activebackground=config.BG_HOVER, activeforeground=config.FG_GOLD, font=config.FONT_SMALL, cursor="hand2")
+            rb.pack(side="left")
+            _bind_hover(rb, config.BG_SECTION, config.BG_HOVER)
+
         self._reset_zoom_btn = tk.Button(side, text="Reset Zoom", command=self._reset_zoom, bg=config.BG_HOVER, fg=config.FG_DIM, activebackground=config.BG_MAIN, activeforeground=config.FG_GOLD, relief=tk.FLAT, font=config.FONT_SMALL, padx=8, pady=3, state="disabled")
         self._reset_zoom_btn.pack(anchor="w", padx=12, pady=(4, 6))
         _bind_hover_active(self._reset_zoom_btn, config.BG_SECTION, config.BG_HOVER)
@@ -440,6 +462,19 @@ class RegionTab(tk.Frame):
     def _on_image_toggle(self):
         if self.canvas_widget:
             self.canvas_widget.show_images = self._img_toggle_var.get()
+            self.canvas_widget.redraw()
+
+    def _on_ignore_collisions_toggle(self):
+        if self.canvas_widget:
+            self.canvas_widget.ignore_collisions = self._ignore_collisions_var.get()
+
+    def _on_lock_formation_toggle(self):
+        if self.canvas_widget:
+            self.canvas_widget.lock_formation = self._lock_formation_var.get()
+
+    def _on_symmetry_change(self):
+        if self.canvas_widget:
+            self.canvas_widget.symmetry_mode = self._symmetry_var.get()
             self.canvas_widget.redraw()
 
     def _update_limits(self):
