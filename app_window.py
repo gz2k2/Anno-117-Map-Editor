@@ -627,6 +627,9 @@ class MapEditorApp(tk.Frame):
         edit_menu.add_command(label="Deselect All",  command=self._deselect_all,   accelerator="Escape")
         edit_menu.add_command(label="Delete Selected", command=self._delete_selected)
         edit_menu.add_separator()
+        edit_menu.add_command(label="Rotate Selection 90° CW",  command=lambda: self._rotate_selection(1),  accelerator="Ctrl+R")
+        edit_menu.add_command(label="Rotate Selection 90° CCW", command=lambda: self._rotate_selection(-1), accelerator="Shift+Ctrl+R")
+        edit_menu.add_separator()
         edit_menu.add_command(label="Resize Map…", command=self._resize_map)
         edit_menu.add_separator()
         edit_menu.add_command(label="Set Game Path…",         command=self._browse_game_path)
@@ -666,6 +669,8 @@ class MapEditorApp(tk.Frame):
         self.root.bind("<Control-a>",      lambda e: self._select_all())
         self.root.bind("<Control-z>",      lambda e: self.cmd_undo())
         self.root.bind("<Control-y>",      lambda e: self.cmd_redo())
+        self.root.bind("<Control-r>",      lambda e: self._rotate_selection(1))    # Ctrl+R        → rotate CW
+        self.root.bind("<Control-R>",      lambda e: self._rotate_selection(-1))   # Shift+Ctrl+R  → rotate CCW
 
     def _build_header(self):
         hdr = tk.Frame(self, bg=config.BG_SECTION, height=52)
@@ -837,6 +842,11 @@ class MapEditorApp(tk.Frame):
         tab = self._current_tab()
         if tab and tab.canvas_widget:
             tab.canvas_widget.deselect_all()
+
+    def _rotate_selection(self, direction: int):
+        tab = self._current_tab()
+        if tab and tab.canvas_widget:
+            tab.canvas_widget.rotate_selection(direction)
 
     def _resize_map(self):
         tab = self._current_tab()
