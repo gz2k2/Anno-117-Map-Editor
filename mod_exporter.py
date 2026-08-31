@@ -119,7 +119,7 @@ def _substitute(text: str, slug: str, display_name: str, description: str, start
       6. "Start_GUID+N" → str(start_guid + N) (highest N first)
       7. "Start_GUID" → str(start_guid)
     """
-    text = text.replace("$ModName_", "")
+    text = text.replace("$ModName_", slug + "_")
     text = text.replace("tamper-enlargedmap-$ModName", f"tamper-enlargedmap-{slug}")
     text = text.replace("tamper-map-$ModName", f"tamper-map-{slug}")
     text = text.replace("$ModName", display_name)
@@ -326,7 +326,7 @@ def build_mod_zip(
             src_diff = tmpl.difficulty if tmpl.difficulty in config.DIFFICULTY_KEYS else "easy"
 
             for diff_key in config.DIFFICULTY_KEYS:
-                file_stem = f"{ri['suffix']}_{diff_key}"
+                file_stem = f"{slug}_{ri['suffix']}_{diff_key}"
                 pool_dir  = os.path.join(mod_root, "data", "tamper", "provinces", ri["province"], "templates", "pool", file_stem)
                 os.makedirs(pool_dir, exist_ok=True)
 
