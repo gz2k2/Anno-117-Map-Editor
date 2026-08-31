@@ -1086,13 +1086,18 @@ class FixedIslandPickerDialog(_BaseDialog):
             _btn(self, "Close", self.destroy).pack()
             return
 
-        # Filter bar - row 1: text search
+        # Filter bar - row 1: text search + culture filter
         fbar1 = tk.Frame(self, bg=config.BG_SECTION)
         fbar1.pack(fill="x", padx=12, pady=(4, 1))
         tk.Label(fbar1, text="Filter:", bg=config.BG_SECTION, fg=config.FG_DIM, font=config.FONT_SMALL).pack(side="left")
         self._filter_var = tk.StringVar()
         self._filter_var.trace_add("write", lambda *_: self._populate())
-        tk.Entry(fbar1, textvariable=self._filter_var, width=28, bg=config.BG_HOVER, fg=config.FG_MAIN, insertbackground=config.FG_MAIN, relief=tk.FLAT, font=config.FONT_SMALL).pack(side="left", padx=6)
+        tk.Entry(fbar1, textvariable=self._filter_var, width=22, bg=config.BG_HOVER, fg=config.FG_MAIN, insertbackground=config.FG_MAIN, relief=tk.FLAT, font=config.FONT_SMALL).pack(side="left", padx=6)
+
+        tk.Label(fbar1, text="Culture:", bg=config.BG_SECTION, fg=config.FG_DIM, font=config.FONT_SMALL).pack(side="left", padx=(8, 2))
+        self._culture_filter_var = tk.StringVar(value="All")
+        for c in ("All", "Celtic", "Roman"):
+            tk.Radiobutton(fbar1, text=c, variable=self._culture_filter_var, value=c, command=self._populate, bg=config.BG_SECTION, fg=config.FG_MAIN, selectcolor=config.BG_HOVER, font=config.FONT_XSMALL, activebackground=config.BG_SECTION).pack(side="left", padx=2)
 
         # Filter bar - row 2: type radio buttons
         fbar2 = tk.Frame(self, bg=config.BG_SECTION)
@@ -1105,14 +1110,16 @@ class FixedIslandPickerDialog(_BaseDialog):
         # Treeview
         tree_frame = tk.Frame(self, bg=config.BG_SECTION)
         tree_frame.pack(fill="both", expand=True, padx=12, pady=4)
-        cols = ("name", "size", "type")
+        cols = ("name", "culture", "size", "type")
         self._tree = ttk.Treeview(tree_frame, columns=cols, show="headings", selectmode="browse")
         self._tree.heading("name", text="Island Name")
+        self._tree.heading("culture", text="Culture")
         self._tree.heading("size", text="Size")
         self._tree.heading("type", text="Type")
-        self._tree.column("name", width=280)
-        self._tree.column("size", width=90, anchor="center")
-        self._tree.column("type", width=100, anchor="center")
+        self._tree.column("name", width=250)
+        self._tree.column("culture", width=80, anchor="center")
+        self._tree.column("size", width=80, anchor="center")
+        self._tree.column("type", width=90, anchor="center")
         sb = ttk.Scrollbar(tree_frame, orient="vertical", command=self._tree.yview)
         self._tree.configure(yscrollcommand=sb.set)
         self._tree.pack(side="left", fill="both", expand=True)
@@ -1132,7 +1139,11 @@ class FixedIslandPickerDialog(_BaseDialog):
         self._tree.delete(*self._tree.get_children())
         flt  = self._filter_var.get().lower()
         tfilter = self._type_filter_var.get()
+        cfilter = self._culture_filter_var.get() if self._culture_filter_var else "All"
         for isl in self._islands:
+            culture = "Roman" if isl.region == "Latium" else "Celtic"
+            if cfilter != "All" and culture != cfilter:
+                continue
             if tfilter == "Continental":
                 if isl.size != "Continental":
                     continue
@@ -1140,10 +1151,9 @@ class FixedIslandPickerDialog(_BaseDialog):
                 continue
             if flt and flt not in isl.name.lower() and flt not in isl.a7m_name.lower():
                 continue
-            self._tree.insert("", "end", iid=isl.a7m_name, values=(
-                isl.name, isl.size,
-                config.ISLAND_TYPE_LABELS.get(isl.island_type, isl.island_type)
-            ))
+            type_label = config.ISLAND_TYPE_LABELS.get(isl.island_type, isl.island_type)
+            values = (isl.name, culture, isl.size, type_label)
+            self._tree.insert("", "end", iid=isl.a7m_name, values=values)
 
     def _confirm(self):
         sel = self._tree.selection()
