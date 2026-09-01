@@ -109,7 +109,6 @@ def _substitute(text: str, slug: str, display_name: str, description: str, start
       6. "Start_GUID+N" → str(start_guid + N) (highest N first)
       7. "Start_GUID" → str(start_guid)
     """
-    text = text.replace("pool/$ModName_", f"pool/{slug}_")
     text = text.replace("$ModName_", "")
     text = text.replace("tamper-enlargedmap-$ModName", f"tamper-enlargedmap-{slug}")
     text = text.replace("tamper-map-$ModName", f"tamper-map-{slug}")
@@ -366,9 +365,9 @@ def build_mod_zip(
             src_diff = tmpl.difficulty if tmpl.difficulty in config.DIFFICULTY_KEYS else "easy"
 
             for diff_key in config.DIFFICULTY_KEYS:
-                dir_name = f"{slug}_{ri['suffix']}_{diff_key}"
                 file_stem = f"{ri['suffix']}_{diff_key}"
-                pool_dir  = os.path.join(mod_root, "data", "tamper", "provinces", ri["province"], "templates", "pool", dir_name)
+                                                        
+                pool_dir  = os.path.join(mod_root, "data", "tamper", "provinces", ri["province"], "templates", "pool", file_stem)
                 os.makedirs(pool_dir, exist_ok=True)
 
                 if progress:
@@ -412,8 +411,7 @@ def build_mod_zip(
                 # For enlarged Latium: also produce the _enlarged a7tinfo
                 if do_enlarged:
                     enl_stem = file_stem + "_enlarged"
-                    enl_dir_name = dir_name + "_enlarged"
-                    enl_dir  = os.path.join(mod_root, "data", "tamper", "provinces", ri["province"], "templates", "pool", enl_dir_name)
+                    enl_dir  = os.path.join(mod_root, "data", "tamper", "provinces", ri["province"], "templates", "pool", enl_stem)
                     os.makedirs(enl_dir, exist_ok=True)
 
                     terrain.write(enl_dir, enl_stem, tmpl.region, ri["suffix"],
@@ -555,24 +553,25 @@ class ModExportDialog(tk.Toplevel):
         self._name_var = tk.StringVar()
         tk.Entry(self, textvariable=self._name_var, width=44, bg=config.BG_MAIN, fg=config.FG_MAIN, insertbackground=config.FG_MAIN, font=config.FONT_SMALL).pack(anchor="w", padx=px, pady=(3, 2))
 
-        # Auto-lowercase, space→hyphen, underscores removed
+        # Live preview of the display name (what appears in-game and in zip)
+        self._preview_var = tk.StringVar(value="")
+        tk.Label(self, textvariable=self._preview_var, bg=config.BG_SECTION, fg=config.FG_GOLD, font=config.FONT_XSMALL, justify="left").pack(anchor="w", padx=px, pady=(0, 6))
+
+        # Auto-lowercase, space→hyphen, underscores removed, and live preview update
         def _on_name_change(*_):
             raw = self._name_var.get()
             cleaned = raw.lower().replace(" ", "-").replace("_", "-")
             if raw != cleaned:
                 self._name_var.set(cleaned)
+                return  # trace will fire again with cleaned value
+            slug = _slugify(cleaned)
+            if slug:
+                dn = _to_display_name(slug)
+                self._preview_var.set(f'In-game / zip name:  "{dn}"')
+            else:
+                self._preview_var.set("")
 
         self._name_var.trace_add("write", _on_name_change)
-
-        # ── Display Name ──────────────────────────────────────────────────
-        tk.Label(self, text="Display Name", bg=config.BG_SECTION, fg=config.FG_MAIN, font=config.FONT_BOLD_SMALL,).pack(anchor="w", padx=px, pady=(4, 0))
-        tk.Label(
-            self,
-            text="The human-readable name of the mod as shown in game.",
-            bg=config.BG_SECTION, fg=config.FG_DIM, font=config.FONT_XSMALL, justify="left").pack(anchor="w", padx=px)
-
-        self._display_name_var = tk.StringVar()
-        tk.Entry(self, textvariable=self._display_name_var, width=44, bg=config.BG_MAIN, fg=config.FG_MAIN, insertbackground=config.FG_MAIN, font=config.FONT_SMALL).pack(anchor="w", padx=px, pady=(3, 6))
 
         # ── Description ───────────────────────────────────────────────────
         tk.Label(self, text="Description", bg=config.BG_SECTION, fg=config.FG_MAIN, font=config.FONT_BOLD_SMALL).pack(anchor="w", padx=px, pady=(4, 0))
@@ -741,11 +740,7 @@ class ModExportDialog(tk.Toplevel):
         if not slug:
             messagebox.showerror("Invalid Mod Name", "Mod Name must contain at least one letter or digit.", parent=self)
             return
-        # ── Display Name ──────────────────────────────────────────────────
-        display_name = self._display_name_var.get().strip()
-        if not display_name:
-            messagebox.showerror("Missing Input", "Please enter a Display Name.", parent=self)
-            return
+        display_name = _to_display_name(slug)
 
         # ── Description (optional) ────────────────────────────────────────
         description = self._desc_var.get().strip()
