@@ -13,9 +13,11 @@
 *.vscode
 
 # working directories
+build/
 working/
 .modcache/
 __pycache__/
+dist/
 
 # PyCharm
 .idea/
