@@ -6,6 +6,7 @@ import os as _os, sys as _sys
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 
 import os
+import re
 import subprocess
 import shutil
 import glob
@@ -24,6 +25,10 @@ RELEVANT_RDA_PATTERNS = [
 ]
 # Also match any rda starting with "dlc01" (for future DLC content)
 RELEVANT_RDA_PREFIX = ["dlc01"]
+
+# Game updates ship as zz_patchfiles_<N>.rda, which override files from the base archives at
+# runtime (higher N wins). They must be extracted after the base archives, in ascending N.
+_PATCH_RDA_RE = re.compile(r"^zz_patchfiles_(\d+)\.rda$")
 
 # Exit code 3762504530 (0xE0434352) = .NET unhandled exception on Console.Clear()
 # This happens AFTER successful extraction when RdaConsole has no real console - safe to ignore
@@ -49,7 +54,14 @@ def _is_relevant_rda(path: str) -> bool:
         return True
     if any(name.startswith(p) for p in RELEVANT_RDA_PREFIX):
         return True
-    return False
+    return _PATCH_RDA_RE.match(name) is not None
+
+
+def _extraction_order(path: str) -> tuple:
+    """Base archives first (alphabetical), then patch archives by ascending patch number."""
+    name = os.path.basename(path).lower()
+    m = _PATCH_RDA_RE.match(name)
+    return (1, int(m.group(1)), name) if m else (0, 0, name)
 
 
 def _run_rda(cmd: list) -> None:
@@ -106,7 +118,7 @@ def extract_map_templates(game_path: str, output_path: str, rda_exe: Optional[st
             return existing
 
     all_rdas = glob.glob(os.path.join(game_path, "**", "*.rda"), recursive=True)
-    rda_files = [f for f in sorted(all_rdas) if _is_relevant_rda(f)]
+    rda_files = sorted((f for f in all_rdas if _is_relevant_rda(f)), key=_extraction_order)
 
     if not rda_files:
         raise RuntimeError(
